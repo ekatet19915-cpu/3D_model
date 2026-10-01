@@ -1,0 +1,8 @@
+
+# Тяжёлые результаты храним вне Git
+outputs/*.glb
+outputs/*.obj
+outputs/*.mp4
+outputs/*.gif
+.env
+*token*
