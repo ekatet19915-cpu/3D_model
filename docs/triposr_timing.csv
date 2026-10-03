@@ -1,0 +1,8 @@
+file,status,model_s,mesh_s,total_s
+hard_03,ok,3.4,4.1,112.0
+hard_04,ok,3.4,3.8,113.1
+medium_03,ok,3.4,3.4,113.3
+medium_04,ok,3.2,3.4,111.2
+medium_05,ok,3.2,3.6,111.2
+simple_05,ok,3.6,3.3,107.4
+simple_06,ok,3.2,4.0,108.4
