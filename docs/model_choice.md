@@ -2,7 +2,7 @@
 
 ## Decision
 **Main model: TripoSR.** Fast (about 7 s per photo on a T4), MIT license,
-simple installation, good shape on tested objects (e.g. mug with handle).
+simple installation, good shape on simple tested objects (e.g. mug with handle).
 
 ## Candidates
 | Model | Result |
