@@ -1,0 +1,16 @@
+file,status,total_s,peak_mem_mb
+hard_01,ok,136.9,6144
+hard_02,ok,138.8,6144
+hard_03,ok,135.3,6144
+hard_04,ok,134.4,6144
+medium_01,ok,133.8,6144
+medium_02,ok,132.7,6144
+medium_03,ok,135.6,6144
+medium_04,ok,133.1,6144
+medium_05,ok,132.8,6144
+simple_01,ok,135.0,6144
+simple_02,ok,132.0,6144
+simple_03,ok,134.0,6144
+simple_04,ok,131.6,6144
+simple_05,ok,135.6,6144
+simple_06,ok,133.7,6144
