@@ -28,16 +28,27 @@ Reconstruction runs in Google Colab (GPU), the rest can run locally on CPU.
 
 ## Phase 1 results (model choice)
 
-- **Main model: TripoSR.** Fast (about 7 s per photo on a T4), MIT license, good shape
-  on the tested mug (handle and back side are plausible). Colors are stored in vertices
-  (no UV texture yet) and the surface is slightly noisy.
-- **Stable Fast 3D: not used.** We got access to the weights, but its code is incompatible
-  with the newest Colab libraries (transformers 5.x, torch 2.11, Python 3.13).
-- Details: `docs/model_choice.md`, `docs/setup_notes.md`, timing in `docs/triposr_timing.csv`.
+We tested two image-to-3D models on the same 15 test photos (`data/test/`).
 
-> **SK:** Hlavný model je TripoSR (rýchly, licencia MIT, dobrý tvar). Farba je zatiaľ vo
-> vrcholoch (nie UV textúra), povrch je mierne zrnitý. Stable Fast 3D sme nepoužili
-> kvôli nekompatibilite s najnovšími knižnicami v Colabe.
+| | TripoSR | Stable Fast 3D (SF3D) |
+|---|---|---|
+| Shape | good, plausible back side (e.g. mug handle) | good |
+| Color / texture | colors stored in vertices; **adds noise to the surface texture** | real UV texture and material |
+| Material | none | **makes every model glossy, which does not fit all objects** (e.g. matte items) |
+| Output | `mesh.obj` | `mesh.glb` |
+| Timing | `docs/triposr_timing.csv` | `docs/sf3d_timing.csv` |
+
+Screenshots of the results for both models: `docs/screenshots/`
+(`<photo>_triposr.png`, `<photo>_sf3d.png`). Sample meshes: `outputs/examples/`.
+
+**Conclusion:** neither model is perfect. TripoSR gives a noisy surface, SF3D a uniformly glossy
+look. Both problems can be reduced in our own steps (surface smoothing in `postprocess`,
+material correction in phase 4). The final choice for `reconstruct` is described in
+`docs/model_choice.md`.
+
+> **SK:** Vyskúšali sme dva modely na rovnakých 15 fotkách. TripoSR pridáva do textúry šum,
+> SF3D robí všetky modely lesklé, čo sa nehodí pre každý predmet (napr. matné). Výsledky a
+> snímky obrazovky sú v `docs/screenshots/`.
 
 ## Notes for phase 2
 
