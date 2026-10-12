@@ -66,9 +66,9 @@ material correction in phase 4). The final choice for `reconstruct` is described
    `trimesh.Trimesh`, names of functions in `src/pipeline.py`.
 6. **Open task:** compare `rembg` vs `BiRefNet` for `remove_background`
    (result goes to `docs/bg_comparison.md`).
-7. Heavy files (GLB, OBJ, MP4) stay on Google Drive, not in Git.
+7. Heavy files (GLB, OBJ) stay on Google Drive, not in Git.
 
-> **SK:** Rekonštrukcia beží len v Colabe. `postprocess` a `export` môžeš vyvíjať lokálne
+> **SK:** Rekonštrukcia beží len v prostredí Google Colab. `postprocess` a `export` možno vyvíjať lokálne
 > na CPU na vzorových sieťach z Google Drive. Neinštaluj TripoSR podľa
 > `requirements.txt` (pozri `docs/setup_notes.md`). Otvorená úloha: porovnanie
 > `rembg` a `BiRefNet`.
