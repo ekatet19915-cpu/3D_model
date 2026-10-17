@@ -120,13 +120,20 @@ def reconstruct(img: Image.Image, sf3d_path: str = "/content/stable-fast-3d",
         _SF3D_MODEL.to("cuda")
         _SF3D_MODEL.eval()
 
+    # T4 (compute capability 7.5) has no native bfloat16: PyTorch then falls
+    # back to a slow attention that needs ~5 GB extra memory (out of memory).
+    # float16 works with the memory-efficient attention on T4.
+    major, _minor = torch.cuda.get_device_capability()
+    dtype = torch.bfloat16 if major >= 8 else torch.float16
+
     with torch.no_grad():
-        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+        with torch.autocast(device_type="cuda", dtype=dtype):
             mesh, _ = _SF3D_MODEL.run_image(
                 [img.convert("RGBA")],
                 bake_resolution=texture_size,
                 remesh="none",
             )
+    torch.cuda.empty_cache()
     return mesh
 
 
