@@ -1,126 +1,113 @@
-# Plausible 3D model from a single photo
+# Plausible 3D Model from a Single Photo
 
-University project (topic 04/11): textured 3D model from one photograph. Reconstruction runs in Google Colab (GPU), the rest can run locally on CPU.
+University project (topic 04/11): creating a textured 3D model of an object from a single photograph.
 
-SK: Školský projekt (téma 04/11): textúrovaný 3D model z jednej fotografie. Rekonštrukcia beží v Google Colabe (GPU), zvyšok sa dá robiť lokálne.
+The project is built on two modern neural image-to-3D models: **Stable Fast 3D (SF3D)** and **TripoSR**. Both models run in the final Gradio app, where their results can be compared on the same photo.
 
-## Interface agreements (src/pipeline.py)
+Reconstruction runs in Google Colab on a T4 GPU. The remaining steps (postprocessing, export) can be run locally on CPU.
 
-| Function | Input | Output |
-|---|---|---|
-| `remove_background(img, keep_largest=True, model_name="isnet-general-use")` | PIL RGB/RGBA | PIL RGBA |
-| `prepare_input(img, as_rgba=False)` | PIL RGBA | PIL RGB 512x512, centered, gray background (with `as_rgba=True`: PIL RGBA 512x512, transparent background) |
-| `reconstruct(img)` | PIL RGBA (transparent background) | `trimesh.Trimesh` |
-| `postprocess(mesh)` | `trimesh.Trimesh` | `trimesh.Trimesh` |
-| `export(mesh, path)` | `trimesh.Trimesh`, path without extension | `.glb` and `.obj` |
+## Features
 
-`reconstruct` always uses SF3D. TripoSR was only used for the comparison in phase 1.
+- background removal and preparation of the photo for reconstruction;
+- 3D model generation with two models (SF3D and TripoSR) and a side-by-side comparison;
+- interactive model viewer in the browser;
+- postprocessing: mesh cleaning and smoothing, simplification, color correction, material adjustment;
+- export to GLB and OBJ.
 
-## Rules
+## Model Comparison
 
-- Reconstruction (CUDA) runs only in Colab.
-- Heavy files (GLB, OBJ, MP4) stay on Google Drive, not in Git.
-- `git pull` before work, commit and push after. Names and commits in English.
-- Notebooks: `A_name.ipynb` / `B_name.ipynb`.
-
-SK: Pred prácou git pull, po práci commit a push. Názvy súborov a commity po anglicky. Ťažké súbory patria na Google Drive, nie do Gitu.
-
-## Phase 1 results (model choice)
-
-We tested two image-to-3D models on the same 15 test photos (`data/test/`).
+Both models were run on the same 15 test photos (Google Colab, T4 GPU).
 
 | | TripoSR | Stable Fast 3D (SF3D) |
 |---|---|---|
 | Shape | good, plausible back side (e.g. mug handle) | good |
-| Color / texture | colors stored in vertices; adds noise to the surface texture | real UV texture and material |
-| Material | none | makes every model glossy, which does not fit all objects (e.g. matte items) |
+| Color / texture | colors stored in vertices, noise visible on the surface | real UV texture and material |
+| Material | none | makes every model glossy |
 | Output | `mesh.obj` | `mesh.glb` |
+| Setup notes | `transformers==4.35.0`, `torchmcubes` replaced by a scikit-image shim | patches for transformers 5.x, float16 on T4, license accepted on Hugging Face |
 | Timing | `docs/triposr_timing.csv` | `docs/sf3d_timing.csv` |
 
-Screenshots of the results for both models: `docs/screenshots/` (`<photo>_triposr.png`, `<photo>_sf3d.png`). Sample meshes: `outputs/examples/`.
+**Conclusion.** SF3D is the main model of the pipeline because it provides a UV texture and a material. TripoSR is kept as a backup and for comparison. Details are in `docs/model_choice.md`, result screenshots in `docs/screenshots/`.
 
-**Conclusion:** neither model is perfect. TripoSR gives a noisy surface, SF3D a uniformly glossy look. Both problems can be reduced in our own steps (surface smoothing in `postprocess`, material correction in phase 4). The final choice for `reconstruct` is described in `docs/model_choice.md`.
+## Pipeline
 
-SK: Vyskúšali sme dva modely na rovnakých 15 fotkách. TripoSR pridáva do textúry šum, SF3D robí všetky modely lesklé, čo sa nehodí pre každý predmet (napr. matné). Výsledky a snímky obrazovky sú v `docs/screenshots/`.
+Processing follows this chain:
 
-## Phase 2 results (core pipeline)
+**photo → background removal → input preparation → SF3D → postprocessing → export**
 
-The whole chain works: photo -> background removed -> prepared input -> SF3D -> postprocess -> GLB and OBJ.
+The functions are in `src/pipeline.py`:
 
-| Function | Where it runs | What it does |
-|---|---|---|
-| `remove_background(img)` | CPU | rembg, model `isnet-general-use`, keeps only the largest object |
-| `prepare_input(img, as_rgba=False)` | CPU | crops to the object, centers it, 512x512. Gray background by default, transparent with `as_rgba=True` |
-| `reconstruct(img)` | Colab GPU | SF3D, the model is loaded once. Input: PIL RGBA with transparent background. Output: `trimesh.Trimesh` with UV texture |
-| `postprocess(mesh)` | CPU | keeps the largest connected part, centers the mesh, longest side = 1, texture is kept |
-| `export(mesh, path)` | CPU | saves `path.glb` and `path.obj` |
+| Function | What it does |
+|---|---|
+| `remove_background(img)` | removes the background with rembg (model `isnet-general-use`), keeps only the largest object |
+| `prepare_input(img, as_rgba=False)` | crops to the object, centers it, resizes to 512×512, gray background (or transparent with `as_rgba=True`) |
+| `reconstruct(img)` | runs SF3D in Colab, takes PIL RGBA, returns a `trimesh.Trimesh` with UV texture |
+| `postprocess(mesh)` | keeps the largest component, centers the model, normalizes the scale |
+| `export(mesh, path)` | saves `path.glb` and `path.obj` |
 
-Batch run on several photos: `src/batch.py` (`run_batch`). For every photo it saves `input.png`, `nobg.png` and the model to Google Drive and writes `docs/pipeline_results.csv` (status, time, number of faces).
+For processing several photos at once there is `src/batch.py` (`run_batch`); results are written to `docs/pipeline_results.csv`.
 
-### Changes to the interface agreements
+### Technical Findings
 
-- `reconstruct` takes PIL RGBA (transparent background), not RGB with gray background. SF3D takes the shape of the object from the alpha channel. The gray RGB version is only for showing the prepared input in the app.
-- `reconstruct` has no `model` argument any more, it always uses SF3D.
-- `remove_background` has the optional argument `model_name`.
+- GLB duplicates vertices along UV seams, so looking for components by vertex index found hundreds of fake pieces (371 for the bottle). Vertices are merged by position first.
+- The rembg model `u2net` cuts off white objects on a light background; `isnet-general-use` performs clearly better.
+- T4 has no native bfloat16 support, and with it SF3D fails with a CUDA out-of-memory error, so float16 is used.
+- transformers 5.x is incompatible with SF3D (see `docs/setup_notes.md`).
 
-### What we found out
+## Gradio App
 
-- GLB files duplicate vertices along UV seams. Looking for components by vertex index finds hundreds of fake pieces (371 for the bottle), so `postprocess` merges vertices by position first. The separate bottle cap is removed, the texture stays.
-- rembg model `u2net` cuts off white objects on a light background (white sneaker on a light sweater). `isnet-general-use` is clearly better, but the sneaker mask is still not perfect. This goes to the limitations.
-- T4 has no native bfloat16. With bfloat16 SF3D fails with CUDA out of memory, so `reconstruct` uses float16 on T4.
-- transformers 5.x does not work with SF3D (see `docs/setup_notes.md`, section "SF3D in Colab").
+The app is in the notebook `Colab_notebooks/SPMM Gradio_app_FINAL.ipynb`. It runs in Colab and provides a public link (`share=True`). Each model has its own Conda environment (`sf3d_env`, `triposr_env`) because their dependencies conflict.
 
-### Known problems for phase 4 and 5
+What the app can do:
 
-- SF3D makes the surface too glossy, some textures are patchy (shiny gold bird).
-- Light objects on a light background lose a part of the mask (sneaker).
-- Only the largest object is kept, so a scene with two objects gives one model.
-- `postprocess` does not smooth the surface yet and does not fix the orientation.
+- photo upload;
+- preprocessing: background removal with alpha matting, edge erosion, mask thresholds, padding, rotation, brightness, contrast, sharpness, color temperature and tint, choice of background type and input size;
+- generation of two models (SF3D and TripoSR) shown side by side; for TripoSR the marching cubes resolution can be set (128, 256 or 320);
+- interactive 3D view (`gr.Model3D`) of the raw and the processed model;
+- download of the result as GLB.
 
-SK: Celý reťazec funguje: fotografia -> odstránenie pozadia -> príprava vstupu -> SF3D -> postprocessing -> GLB a OBJ. `reconstruct` teraz berie RGBA obrázok s priehľadným pozadím a vždy používa SF3D. Na viac fotiek naraz slúži `src/batch.py`. Známe problémy: lesklý materiál SF3D, svetlý predmet na svetlom pozadí (tenisky) a len jeden najväčší objekt v zábere. Inštalácia SF3D v Colabe je v `docs/setup_notes.md`.
+## Quality Improvements
 
-## How to run (Colab)
+Postprocessing runs separately for each model:
 
-1. Open a Colab notebook with a T4 GPU and install everything as described in `docs/setup_notes.md` (section "SF3D in Colab"). Restart the runtime when Colab asks.
-2. Clone the repository, log in to Hugging Face (token `HF_TOKEN` in Colab secrets) and mount Google Drive.
-3. Run one photo:
+- **Mesh cleaning:** vertex welding, removal of small components, hole filling, orientation fix.
+- **Mesh simplification** (decimation) to a target number of faces.
+- **Taubin smoothing:** reduces the surface noise of TripoSR without shrinking the model.
+- **New UV unwrap** (xatlas) and texture re-baking at 1024, 2048 or 4096 px.
+- **Color correction:** brightness, contrast and saturation (texture for SF3D, vertex colors for TripoSR).
+- **Material adjustment:** metallic and glossiness sliders (roughness = 1 − glossiness). This fixes the SF3D problem of making every object glossy.
 
-```python
-import sys
-sys.path.insert(0, "/content/3D_model")
+## Results and Limitations
 
-from PIL import Image
-from src.pipeline import remove_background, prepare_input, reconstruct, postprocess, export
+All 15 photos were run through the pipeline. Results and screenshots are in `docs/screenshots/` and `Pictures/screenshots/`, final photos in `Pictures/final_photos/`. Heavy files (GLB, OBJ, MP4) are stored on Google Drive, not in Git.
 
-photo = Image.open("/content/3D_model/foto-bottle-medium.jpeg")
-rgba = remove_background(photo)
-mesh = reconstruct(prepare_input(rgba, as_rgba=True))
-mesh = postprocess(mesh)
-export(mesh, "/content/drive/MyDrive/3D_model_outputs/bottle")
-```
+Known limitations:
 
-4. Run several photos at once:
+- a light object on a light background loses part of the mask (e.g. the white sneaker);
+- only the largest object in the photo is reconstructed;
+- the back side of the object is the model's guess, not exact geometry;
+- SF3D sometimes gives a patchy texture (gold bird) and an overly glossy look, TripoSR gives only vertex colors and a noisy surface;
+- the environment is sensitive to library versions, and a GPU in Colab is required.
 
-```python
-from src.batch import run_batch
-run_batch(["/content/3D_model/foto-bird-hard.jpg"],
-          "/content/drive/MyDrive/3D_model_outputs/pipeline_batch",
-          csv_path="/content/3D_model/docs/pipeline_results.csv")
-```
+## How to Run (Google Colab)
 
-`postprocess` and `export` also work locally on CPU (install `trimesh numpy scipy pillow`), `remove_background` additionally needs `rembg[cpu]`.
+1. Open the notebook `Colab_notebooks/SPMM Gradio_app_FINAL.ipynb` and enable a T4 GPU.
+2. Run the first cell (condacolab) **twice**, until it prints "Everything looks OK!".
+3. Install SF3D (about 13 minutes) and TripoSR (about 4 minutes), each into its own Conda environment.
+4. Log in to Hugging Face: add the token `HF_TOKEN` to Colab secrets and accept the license of `stabilityai/stable-fast-3d` on its model page.
+5. Run the cell `!python /content/app.py` and open the public Gradio link.
 
-## Notes about TripoSR (phase 1 only)
+The first run takes longer because the models download their weights.
 
-- TripoSR environment is fragile. Do not run `pip install -r requirements.txt` as is. Required workarounds: `transformers==4.35.0`, and a `torchmcubes.py` shim based on scikit-image placed in the TripoSR folder. See `docs/setup_notes.md`.
-- TripoSR output: `mesh.obj` with vertex colors, `input.png` (background removed). TripoSR removes the background itself (rembg) inside `run.py`.
-- Sample meshes from phase 1 are on Google Drive: `3D_model_outputs/triposr/<photo_name>/0/mesh.obj`.
+> **Note about TripoSR.** Do not run `pip install -r requirements.txt` as is; use the workarounds from `docs/setup_notes.md`.
 
-## Open tasks
+## Repository Structure
 
-- Compare rembg vs BiRefNet for `remove_background` (result goes to `docs/bg_comparison.md`). `isnet-general-use` is used for now.
-- Material and texture improvements, smoothing, orientation (phase 4).
-
-## Next: phase 3 (Gradio app)
-
-Upload a photo, show intermediate steps (original -> no background -> prepared input -> depth map), interactive 3D view, download of GLB and OBJ, turntable animation.
+| Folder | Contents |
+|---|---|
+| `src/` | pipeline and batch processing code |
+| `Colab_notebooks/`, `notebooks/` | Colab notebooks |
+| `data/test/` | 15 test photos |
+| `source_photos/`, `Pictures/` | source photos and result screenshots |
+| `docs/` | notes, timings, screenshots |
+| `tests/` | tests |
